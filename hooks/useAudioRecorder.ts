@@ -8,12 +8,18 @@ export interface RecordingResult {
     duration: number;
 }
 
+export interface UseAudioRecorderOptions {
+    backingTrackUrl?: string;
+    backingTrackVolume?: number;
+    loopBackingTrack?: boolean;
+}
+
 export interface UseAudioRecorderReturn {
     isRecording: boolean;
     isPaused: boolean;
     recordingTime: number;
     audioLevel: number;
-    startRecording: () => Promise<void>;
+    startRecording: (options?: UseAudioRecorderOptions) => Promise<void>;
     stopRecording: () => Promise<RecordingResult | null>;
     pauseRecording: () => void;
     resumeRecording: () => void;
@@ -35,6 +41,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
     const audioContextRef = useRef<AudioContext | null>(null);
     const animationFrameRef = useRef<number | null>(null);
     const startTimeRef = useRef<number>(0);
+    const backingTrackRef = useRef<HTMLAudioElement | null>(null);
 
     // Clean up on unmount
     useEffect(() => {
@@ -46,6 +53,10 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
             }
             if (audioContextRef.current) {
                 audioContextRef.current.close();
+            }
+            if (backingTrackRef.current) {
+                backingTrackRef.current.pause();
+                backingTrackRef.current = null;
             }
         };
     }, []);
@@ -65,7 +76,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         }
     }, [isRecording, isPaused]);
 
-    const startRecording = useCallback(async () => {
+    const startRecording = useCallback(async (options?: UseAudioRecorderOptions) => {
         try {
             setError(null);
             chunksRef.current = [];
@@ -107,6 +118,17 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
             mediaRecorderRef.current = mediaRecorder;
             mediaRecorder.start(100); // Collect data every 100ms
 
+            // Start backing track if provided
+            if (options?.backingTrackUrl) {
+                const audio = new Audio(options.backingTrackUrl);
+                audio.volume = options.backingTrackVolume ?? 0.7;
+                audio.loop = options.loopBackingTrack ?? true;
+                backingTrackRef.current = audio;
+                audio.play().catch(err => {
+                    console.warn('Could not play backing track:', err);
+                });
+            }
+
             // Start timer
             startTimeRef.current = Date.now();
             setRecordingTime(0);
@@ -131,6 +153,13 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
             if (!mediaRecorderRef.current || !streamRef.current) {
                 resolve(null);
                 return;
+            }
+
+            // Stop backing track
+            if (backingTrackRef.current) {
+                backingTrackRef.current.pause();
+                backingTrackRef.current.currentTime = 0;
+                backingTrackRef.current = null;
             }
 
             mediaRecorderRef.current.onstop = async () => {

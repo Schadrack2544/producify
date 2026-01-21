@@ -7,6 +7,12 @@
 
 export type PartType = "verse" | "bridge" | "chorus" | "intro" | "outro";
 
+export interface BackingTrack {
+    blob: Blob | null;
+    url: string | null;
+    duration: number;
+}
+
 export interface SongPart {
     id: string;
     type: PartType;
@@ -15,10 +21,12 @@ export interface SongPart {
     url: string | null;
     duration: number;
     order: number;
+    backingTrack: BackingTrack | null;
 }
 
 export interface StoredAudio {
     genre: string;
+    tempo: number;
     parts: SongPart[];
     combinedAudio: {
         blob: Blob | null;
@@ -31,6 +39,7 @@ export interface StoredAudio {
 // Module-level state for cross-component sharing
 let audioStore: StoredAudio = {
     genre: "",
+    tempo: 120,
     parts: [],
     combinedAudio: null,
     createdAt: new Date().toISOString(),
@@ -72,6 +81,7 @@ export function addPart(type: PartType): SongPart {
         url: null,
         duration: 0,
         order: audioStore.parts.length,
+        backingTrack: null,
     };
 
     audioStore = {
@@ -134,6 +144,26 @@ export function setCombinedAudio(audio: { blob: Blob; url: string; duration: num
     notifyListeners();
 }
 
+export function setTempo(tempo: number): void {
+    audioStore = { ...audioStore, tempo };
+    notifyListeners();
+}
+
+export function updatePartBackingTrack(
+    partId: string,
+    backingTrack: { blob: Blob; url: string; duration: number }
+): void {
+    audioStore = {
+        ...audioStore,
+        parts: audioStore.parts.map(p =>
+            p.id === partId
+                ? { ...p, backingTrack }
+                : p
+        ),
+    };
+    notifyListeners();
+}
+
 export function clearAudioStore(): void {
     // Revoke old URLs to prevent memory leaks
     if (audioStore.combinedAudio?.url) {
@@ -141,10 +171,12 @@ export function clearAudioStore(): void {
     }
     audioStore.parts.forEach(part => {
         if (part.url) URL.revokeObjectURL(part.url);
+        if (part.backingTrack?.url) URL.revokeObjectURL(part.backingTrack.url);
     });
 
     audioStore = {
         genre: "",
+        tempo: 120,
         parts: [],
         combinedAudio: null,
         createdAt: new Date().toISOString(),

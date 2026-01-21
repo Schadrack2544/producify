@@ -6,15 +6,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
 import {
   Mic, Square, Play, ArrowRight, Music, Sparkles, ArrowLeft,
-  Trash2, Check, Plus, GripVertical, ArrowUp, ArrowDown
+  Trash2, Check, Plus, ArrowUp, ArrowDown, Volume2
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 import { WaveformVisualizer } from "@/components/WaveformVisualizer"
 import { RecordingTimer } from "@/components/RecordingTimer"
+import { BackingTrackPlayer } from "@/components/BackingTrackPlayer"
+import { BeatVisualizer, PulsatingRecordIndicator } from "@/components/BeatVisualizer"
 import { useAudioRecorder } from "@/hooks/useAudioRecorder"
 import {
   decodeAudioBlob,
@@ -27,8 +31,10 @@ import {
   addPart,
   removePart,
   updatePartRecording,
+  updatePartBackingTrack,
   reorderParts,
   setCombinedAudio,
+  setTempo,
   getAudioStore,
   hasAllRecordings,
   getTotalRecordingDuration,
@@ -38,6 +44,7 @@ import {
   PartType,
   SongPart,
 } from "@/lib/useAudioStore"
+import { getDefaultBpm, generateBackingTrack } from "@/lib/beatGenerator"
 
 type RecordingState = "idle" | "recording" | "recorded"
 
@@ -63,6 +70,11 @@ export default function CreatePage() {
   const [playingPartId, setPlayingPartId] = useState<string | null>(null)
   const [selectedPartType, setSelectedPartType] = useState<PartType>("verse")
 
+  // Backing track state
+  const [tempo, setTempoState] = useState(120)
+  const [playBackingDuringRecording, setPlayBackingDuringRecording] = useState(true)
+  const [isGeneratingBacking, setIsGeneratingBacking] = useState(false)
+
   const {
     isRecording,
     recordingTime,
@@ -76,6 +88,7 @@ export default function CreatePage() {
   useEffect(() => {
     const store = getAudioStore()
     setParts(store.parts)
+    setTempoState(store.tempo)
 
     // Initialize recording states
     const states: Record<string, RecordingState> = {}
@@ -84,6 +97,20 @@ export default function CreatePage() {
     })
     setRecordingStates(states)
   }, [])
+
+  // Update tempo in store when it changes
+  const handleTempoChange = (newTempo: number) => {
+    setTempoState(newTempo)
+    setTempo(newTempo)
+  }
+
+  // Set default tempo based on genre when genre changes
+  useEffect(() => {
+    if (selectedGenre) {
+      const defaultBpm = getDefaultBpm(selectedGenre)
+      handleTempoChange(defaultBpm)
+    }
+  }, [selectedGenre])
 
   // Handle recording errors
   useEffect(() => {
@@ -132,7 +159,43 @@ export default function CreatePage() {
 
     setCurrentRecordingPartId(partId)
     setRecordingStates((prev) => ({ ...prev, [partId]: "recording" }))
-    await startRecorder()
+
+    // Generate backing track for this part if we don't have one
+    let backingTrackUrl: string | undefined
+    if (playBackingDuringRecording && selectedGenre && part) {
+      try {
+        setIsGeneratingBacking(true)
+        // Check if part already has a backing track
+        if (part.backingTrack?.url) {
+          backingTrackUrl = part.backingTrack.url
+        } else {
+          // Generate new backing track
+          const result = await generateBackingTrack(selectedGenre, part.type, tempo, 8)
+          backingTrackUrl = result.url
+          // Store the backing track for this part
+          updatePartBackingTrack(partId, {
+            blob: result.blob,
+            url: result.url,
+            duration: result.buffer.duration
+          })
+          setParts(prev => prev.map(p =>
+            p.id === partId
+              ? { ...p, backingTrack: { blob: result.blob, url: result.url, duration: result.buffer.duration } }
+              : p
+          ))
+        }
+      } catch (error) {
+        console.error('Error generating backing track:', error)
+      } finally {
+        setIsGeneratingBacking(false)
+      }
+    }
+
+    await startRecorder({
+      backingTrackUrl,
+      backingTrackVolume: 0.6,
+      loopBackingTrack: true
+    })
   }
 
   const stopRecording = async () => {
