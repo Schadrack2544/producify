@@ -1,5 +1,5 @@
 /**
- * Audio Utilities for Producify
+ * Audio Utilities for mozart
  * Handles audio processing, combining, and WAV encoding
  */
 

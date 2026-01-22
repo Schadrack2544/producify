@@ -11,7 +11,7 @@ export default function HomePage() {
         <div className="text-center mb-16">
           <div className="flex items-center justify-center gap-2 mb-4">
             <Music className="h-8 w-8 text-purple-400" />
-            <h1 className="text-4xl font-bold text-white">Producify</h1>
+            <h1 className="text-4xl font-bold text-white">mozart</h1>
           </div>
           <p className="text-xl text-gray-300 max-w-2xl mx-auto">
             Transform your voice into professional songs with AI-powered beats, melody, and mastering

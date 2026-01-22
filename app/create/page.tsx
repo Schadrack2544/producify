@@ -312,7 +312,7 @@ export default function CreatePage() {
         <div className="flex items-center justify-between mb-8">
           <Link href="/" className="flex items-center gap-2 text-white hover:text-purple-300 transition-colors">
             <Music className="h-6 w-6" />
-            <span className="text-xl font-bold">Producify</span>
+            <span className="text-xl font-bold">mozart</span>
           </Link>
 
           {currentStep > 0 && !isProcessing && (
