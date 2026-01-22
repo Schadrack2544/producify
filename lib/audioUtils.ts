@@ -1,5 +1,5 @@
 /**
- * Audio Utilities for mozart
+ * Audio Utilities for musicPro
  * Handles audio processing, combining, and WAV encoding
  */
 

@@ -52,7 +52,7 @@ export default function ResultPage() {
 
     setDownloadStarted(true)
 
-    const filename = `mozart-${audioData.genre}-song-${Date.now()}.wav`
+    const filename = `musicPro-${audioData.genre}-song-${Date.now()}.wav`
     downloadAudio(audioData.combinedAudio.blob, filename)
 
     setTimeout(() => {
@@ -64,7 +64,7 @@ export default function ResultPage() {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "Check out my song made with mozart!",
+          title: "Check out my song made with musicPro!",
           text: `I just created a ${audioData?.genre || ""} song using AI-powered music production.`,
           url: window.location.href,
         })
@@ -99,7 +99,7 @@ export default function ResultPage() {
         <div className="flex items-center gap-2 mb-8">
           <Link href="/" className="flex items-center gap-2 text-white hover:text-purple-300 transition-colors">
             <Music className="h-6 w-6" />
-            <span className="text-xl font-bold">mozart</span>
+            <span className="text-xl font-bold">musicPro</span>
           </Link>
         </div>
 
@@ -125,7 +125,7 @@ export default function ResultPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-white">My mozart Song</CardTitle>
+                <CardTitle className="text-white">My musicPro Song</CardTitle>
                 <CardDescription className="text-gray-300">
                   {audioData.parts.length} parts combined
                 </CardDescription>
