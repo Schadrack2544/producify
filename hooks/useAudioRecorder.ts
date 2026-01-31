@@ -102,12 +102,14 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
             source.connect(analyser);
             analyserRef.current = analyser;
 
-            // Create MediaRecorder
-            const mediaRecorder = new MediaRecorder(stream, {
-                mimeType: MediaRecorder.isTypeSupported('audio/webm')
-                    ? 'audio/webm'
-                    : 'audio/mp4'
-            });
+            // Create MediaRecorder - prefer webm, fallback to mp4 or default
+            let mimeType = 'audio/webm';
+            if (!MediaRecorder.isTypeSupported('audio/webm')) {
+                mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+            }
+
+            const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+            const actualMimeType = mediaRecorder.mimeType || 'audio/webm';
 
             mediaRecorder.ondataavailable = (e) => {
                 if (e.data.size > 0) {
@@ -175,8 +177,9 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
                     animationFrameRef.current = null;
                 }
 
-                // Create blob from chunks
-                const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+                // Create blob from chunks with the actual mime type used by MediaRecorder
+                const actualMimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
+                const blob = new Blob(chunksRef.current, { type: actualMimeType });
                 const url = URL.createObjectURL(blob);
 
                 // Get duration

@@ -3,6 +3,14 @@
 /**
  * Audio Store - Simple state management for audio data between pages
  * Supports dynamic song parts (multiple verses, choruses, etc.)
+ * 
+ * Note: Due to browser limitations (Blobs cannot be serialized to localStorage),
+ * audio data is stored in memory. For production persistence, consider:
+ * - IndexedDB: Better for large binary data
+ * - Service Worker + Cache API: For offline support
+ * - Server-side session storage: For collaborative features
+ * 
+ * Current behavior: Data persists during the session but clears on page refresh.
  */
 
 export type PartType = "verse" | "bridge" | "chorus" | "intro" | "outro";
@@ -22,6 +30,7 @@ export interface SongPart {
     duration: number;
     order: number;
     backingTrack: BackingTrack | null;
+    beatGenerated?: boolean;
 }
 
 export interface StoredAudio {
@@ -34,6 +43,8 @@ export interface StoredAudio {
         duration: number;
     } | null;
     createdAt: string;
+    analysisInProgress?: boolean;
+    recordingPhaseComplete?: boolean;
 }
 
 // Module-level state for cross-component sharing
@@ -43,6 +54,8 @@ let audioStore: StoredAudio = {
     parts: [],
     combinedAudio: null,
     createdAt: new Date().toISOString(),
+    analysisInProgress: false,
+    recordingPhaseComplete: false,
 };
 
 // Listeners for state changes
@@ -180,6 +193,30 @@ export function clearAudioStore(): void {
         parts: [],
         combinedAudio: null,
         createdAt: new Date().toISOString(),
+        analysisInProgress: false,
+        recordingPhaseComplete: false,
+    };
+    notifyListeners();
+}
+
+export function setAnalysisInProgress(inProgress: boolean): void {
+    audioStore = { ...audioStore, analysisInProgress: inProgress };
+    notifyListeners();
+}
+
+export function setRecordingPhaseComplete(complete: boolean): void {
+    audioStore = { ...audioStore, recordingPhaseComplete: complete };
+    notifyListeners();
+}
+
+export function updatePartBeatGenerated(partId: string, generated: boolean): void {
+    audioStore = {
+        ...audioStore,
+        parts: audioStore.parts.map(p =>
+            p.id === partId
+                ? { ...p, beatGenerated: generated }
+                : p
+        ),
     };
     notifyListeners();
 }

@@ -6,24 +6,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
 import {
   Mic, Square, Play, ArrowRight, Music, Sparkles, ArrowLeft,
-  Trash2, Check, Plus, ArrowUp, ArrowDown, Volume2
+  Trash2, Check, Plus, ArrowUp, ArrowDown
 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
 import { WaveformVisualizer } from "@/components/WaveformVisualizer"
 import { RecordingTimer } from "@/components/RecordingTimer"
-import { BackingTrackPlayer } from "@/components/BackingTrackPlayer"
-import { BeatVisualizer, PulsatingRecordIndicator } from "@/components/BeatVisualizer"
 import { useAudioRecorder } from "@/hooks/useAudioRecorder"
 import {
-  decodeAudioBlob,
-  concatenateAudioBuffers,
-  audioBufferToWav,
   formatDuration
 } from "@/lib/audioUtils"
 import {
@@ -31,20 +24,16 @@ import {
   addPart,
   removePart,
   updatePartRecording,
-  updatePartBackingTrack,
   reorderParts,
-  setCombinedAudio,
   setTempo,
   getAudioStore,
-  hasAllRecordings,
-  getTotalRecordingDuration,
   getPartTypeColor,
   getPartTypeBorderColor,
   getPartTypeBgColor,
   PartType,
   SongPart,
 } from "@/lib/useAudioStore"
-import { getDefaultBpm, generateBackingTrack } from "@/lib/beatGenerator"
+import { getDefaultBpm } from "@/lib/beatGenerator"
 
 type RecordingState = "idle" | "recording" | "recorded"
 
@@ -66,14 +55,9 @@ export default function CreatePage() {
   const [recordingStates, setRecordingStates] = useState<Record<string, RecordingState>>({})
   const [currentRecordingPartId, setCurrentRecordingPartId] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [processingStep, setProcessingStep] = useState(0)
   const [playingPartId, setPlayingPartId] = useState<string | null>(null)
   const [selectedPartType, setSelectedPartType] = useState<PartType>("verse")
-
-  // Backing track state
   const [tempo, setTempoState] = useState(120)
-  const [playBackingDuringRecording, setPlayBackingDuringRecording] = useState(true)
-  const [isGeneratingBacking, setIsGeneratingBacking] = useState(false)
 
   const {
     isRecording,
@@ -160,41 +144,11 @@ export default function CreatePage() {
     setCurrentRecordingPartId(partId)
     setRecordingStates((prev) => ({ ...prev, [partId]: "recording" }))
 
-    // Generate backing track for this part if we don't have one
-    let backingTrackUrl: string | undefined
-    if (playBackingDuringRecording && selectedGenre && part) {
-      try {
-        setIsGeneratingBacking(true)
-        // Check if part already has a backing track
-        if (part.backingTrack?.url) {
-          backingTrackUrl = part.backingTrack.url
-        } else {
-          // Generate new backing track
-          const result = await generateBackingTrack(selectedGenre, part.type, tempo, 8)
-          backingTrackUrl = result.url
-          // Store the backing track for this part
-          updatePartBackingTrack(partId, {
-            blob: result.blob,
-            url: result.url,
-            duration: result.buffer.duration
-          })
-          setParts(prev => prev.map(p =>
-            p.id === partId
-              ? { ...p, backingTrack: { blob: result.blob, url: result.url, duration: result.buffer.duration } }
-              : p
-          ))
-        }
-      } catch (error) {
-        console.error('Error generating backing track:', error)
-      } finally {
-        setIsGeneratingBacking(false)
-      }
-    }
-
+    // Start recording WITHOUT a backing track - user records clean vocals first
     await startRecorder({
-      backingTrackUrl,
-      backingTrackVolume: 0.6,
-      loopBackingTrack: true
+      backingTrackUrl: undefined,
+      backingTrackVolume: 0,
+      loopBackingTrack: false
     })
   }
 
@@ -238,65 +192,22 @@ export default function CreatePage() {
     return selectedGenre && parts.length > 0 && parts.every(p => p.blob !== null)
   }
 
-  const processingSteps = [
-    "Analyzing your vocal recordings...",
-    "Decoding audio files...",
-    "Combining song parts in order...",
-    `Applying ${selectedGenre} style arrangement...`,
-    "Finalizing your song...",
-  ]
-
   const processAudio = async () => {
     if (!canProceed()) return
 
     setIsProcessing(true)
-    setProcessingStep(0)
 
     try {
-      // Step 1: Decode all audio blobs
-      setProcessingStep(1)
-      await new Promise(r => setTimeout(r, 500))
-
-      const audioBuffers: AudioBuffer[] = []
-
-      for (const part of parts) {
-        if (part.blob) {
-          const buffer = await decodeAudioBlob(part.blob)
-          audioBuffers.push(buffer)
-        }
-      }
-
-      // Step 2: Combine audio buffers in the order they appear
-      setProcessingStep(2)
-      await new Promise(r => setTimeout(r, 500))
-
-      const combinedBuffer = await concatenateAudioBuffers(audioBuffers)
-
-      // Step 3: Convert to WAV
-      setProcessingStep(3)
-      await new Promise(r => setTimeout(r, 500))
-
-      const wavBlob = audioBufferToWav(combinedBuffer)
-      const wavUrl = URL.createObjectURL(wavBlob)
-
-      // Step 4: Finalize
-      setProcessingStep(4)
-      await new Promise(r => setTimeout(r, 500))
-
-      // Store combined audio
+      // Mark recording phase as complete
       setGenre(selectedGenre)
-      setCombinedAudio({
-        blob: wavBlob,
-        url: wavUrl,
-        duration: combinedBuffer.duration,
-      })
+      setTempo(tempo)
 
-      // Navigate to result page
-      router.push("/result")
+      // Navigate to analysis page where beats will be generated while audio is being combined
+      router.push("/analysis")
 
     } catch (error) {
-      console.error("Error processing audio:", error)
-      alert("There was an error processing your song. Please try again.")
+      console.error("Error starting analysis:", error)
+      alert("There was an error starting the analysis. Please try again.")
       setIsProcessing(false)
     }
   }
@@ -651,51 +562,6 @@ export default function CreatePage() {
               </div>
             )}
           </div>
-        )}
-
-        {/* Processing State */}
-        {isProcessing && (
-          <Card className="max-w-2xl mx-auto bg-white/10 backdrop-blur-sm border-white/20">
-            <CardContent className="pt-8 pb-8">
-              <div className="text-center">
-                {/* Animated music note */}
-                <div className="relative w-20 h-20 mx-auto mb-6">
-                  <div className="absolute inset-0 bg-purple-500/30 rounded-full animate-ping" />
-                  <div className="absolute inset-2 bg-purple-500/50 rounded-full animate-pulse" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Music className="h-10 w-10 text-purple-400 animate-bounce" />
-                  </div>
-                </div>
-
-                <h3 className="text-2xl font-bold text-white mb-2">Creating Your Song</h3>
-                <p className="text-gray-300 mb-6">{processingSteps[processingStep]}</p>
-
-                {/* Progress bar */}
-                <div className="max-w-md mx-auto mb-6">
-                  <Progress value={(processingStep + 1) / processingSteps.length * 100} className="h-2" />
-                </div>
-
-                <div className="space-y-2 text-sm text-left max-w-sm mx-auto">
-                  {processingSteps.map((step, index) => (
-                    <div
-                      key={index}
-                      className={`flex items-center gap-2 ${index <= processingStep ? "text-purple-300" : "text-gray-500"
-                        }`}
-                    >
-                      {index < processingStep ? (
-                        <Check className="h-4 w-4 text-green-400" />
-                      ) : index === processingStep ? (
-                        <div className="h-4 w-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <div className="h-4 w-4 border border-gray-600 rounded-full" />
-                      )}
-                      <span>{step}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         )}
       </div>
     </div>
